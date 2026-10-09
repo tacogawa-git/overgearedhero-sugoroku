@@ -156,6 +156,7 @@ html{color-scheme:light}body{margin:0}[hidden]{display:none!important}
       <ul>
         <li>サイコロ2個の合計(2〜12)だけ進みます。倍率を上げても進む数は変わりません。</li>
         <li>倍率は振る前に選び、倍率と同じ数のリソースを消費します(×1でも1消費)。</li>
+        <li>×2以上は、残りリソースが倍率の10倍以上のときだけ選べます(×2:20、×3:30、×5:50、×10:100)。×1はいつでも選べます。</li>
         <li>報酬は止まったマスの報酬額×倍率です。スタート位置の報酬は数えません。</li>
         <li>24マスのループで、25マス目は1マス目です。</li>
         <li>期待値が最大になる選び方なので、1回ごとの結果は運でぶれます。</li>
@@ -168,6 +169,7 @@ html{color-scheme:light}body{margin:0}[hidden]{display:none!important}
 <script>
 const R=[50,400,800,50,0,0,0,0,625,50,200,0,0,200,800,0,50,200,625,0,62.5,200,400,0];
 const N=24, MS=[1,2,3,5,10], MAXR=1000;
+const THR={1:1,2:20,3:30,5:50,10:100}; // 必要リソース(×1は常に可、他は倍率の10倍以上)
 const P=[]; for(let s=2;s<=12;s++) P[s]=(6-Math.abs(s-7))/36;
 const ER=R.map((_,i)=>{let e=0;for(let s=2;s<=12;s++)e+=P[s]*R[(i+s)%N];return e;});
 const V=[new Float64Array(N)], OPT=[new Int8Array(N)];
@@ -176,7 +178,7 @@ function qv(r,i,m){return m*ER[i]+cont(r-m,i);}
 for(let r=1;r<=MAXR;r++){
   const v=new Float64Array(N),o=new Int8Array(N);
   for(let i=0;i<N;i++){let best=-1,bm=1;
-    for(const m of MS){if(m>r)break;const q=qv(r,i,m);if(q>best+1e-9){best=q;bm=m;}}
+    for(const m of MS){if(r<THR[m])break;const q=qv(r,i,m);if(q>best+1e-9){best=q;bm=m;}}
     v[i]=best;o[i]=bm;}
   V.push(v);OPT.push(o);
 }
@@ -192,7 +194,7 @@ function render(){
   $("pos").value=pos; $("res").value=res;
   const i=pos-1, over=res<1;
   const rec=over?0:OPT[res][i];
-  const m=over?0:(chosen&&chosen<=res?chosen:rec);
+  const m=over?0:(chosen&&res>=THR[chosen]?chosen:rec);
   const big=$("big");
   big.className="big num "+(over?"c1":"c"+rec);
   big.textContent=over?"終了":"×"+rec;
@@ -202,11 +204,11 @@ function render(){
 
   let rows="";
   for(const k of MS){
-    const ok=!over&&k<=res;
+    const ok=!over&&res>=THR[k];
     const q=ok?qv(res,i,k):null;
     const d=ok?q-V[res][i]:null;
     const isRec=ok&&k===rec;
-    rows+=`<tr class="${ok?(k===m&&!over?"pick":""):"dis"}"><td><span class="tag c${k}">×${k}</span></td>
+    rows+=`<tr class="${ok?(k===m&&!over?"pick":""):"dis"}"><td><span class="tag c${k}">×${k}</span> <span class="note">${k>1?"残り"+THR[k]+"以上":"いつでも"}</span></td>
       <td class="num">${ok?fmt(q):"−"}</td>
       <td class="num" style="color:${ok&&d<-1e-9?"var(--bad)":"var(--good)"}">${ok?(isRec?"最適":fmt(d)):"−"}</td>
       <td><button type="button" class="sel" data-m="${k}" aria-pressed="${k===m&&!over}" ${ok?"":"disabled"}>${k===m&&!over?"選択中":"選ぶ"}</button></td></tr>`;
@@ -250,7 +252,7 @@ $("cmp").addEventListener("click",e=>{
 $("rolls").addEventListener("click",e=>{
   const b=e.target.closest("button[data-s]");if(!b||b.disabled)return;
   const s=Number(b.dataset.s), i=pos-1;
-  const m=chosen&&chosen<=res?chosen:OPT[res][i];
+  const m=chosen&&res>=THR[chosen]?chosen:OPT[res][i];
   const to=(i+s)%N, reward=m*R[to];
   hist.push({from:pos,to:to+1,s,m,reward,res0:res,gain0:gain});
   res-=m;pos=to+1;gain+=reward;chosen=null;render();});
