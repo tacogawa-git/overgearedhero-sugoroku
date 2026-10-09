@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>スゴロク最適倍率</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+JP:wght@400;600;700&display=swap">
+<style>
+/* Layout: 1 column tool page. State inputs -> answer -> multiplier comparison -> roll buttons -> board strip -> log. */
+:root{
+  --bg:#F2F4F7; --surface:#FFFFFF; --ink:#17202B; --muted:#59667A; --line:#D6DCE4;
+  --accent:#1D4ED8; --accent-ink:#FFFFFF; --focus:#1D4ED8;
+  --m1:#E7EBF0; --m2:#CFE0F8; --m3:#A7C6F2; --m5:#F7D88C; --m10:#EE9A63;
+  --m-ink:#17202B; --good:#0E7C4A; --bad:#B42318;
+  --font-body:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E141C; --surface:#18212C; --ink:#E8EDF3; --muted:#93A0B3; --line:#2B3746;
+  --accent:#7BA4FF; --accent-ink:#0E141C; --focus:#7BA4FF;
+  --m1:#243040; --m2:#2B4468; --m3:#3A5F95; --m5:#8A6A1E; --m10:#B5562A;
+  --m-ink:#EEF2F7; --good:#4FD08F; --bad:#FF8A7A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E141C; --surface:#18212C; --ink:#E8EDF3; --muted:#93A0B3; --line:#2B3746;
+  --accent:#7BA4FF; --accent-ink:#0E141C; --focus:#7BA4FF;
+  --m1:#243040; --m2:#2B4468; --m3:#3A5F95; --m5:#8A6A1E; --m10:#B5562A;
+  --m-ink:#EEF2F7; --good:#4FD08F; --bad:#FF8A7A; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6}
+*{box-sizing:border-box}
+.wrap{max-width:46rem;margin-inline:auto;padding-inline:16px;padding-block:20px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:1.5rem;line-height:1.3;margin:0;text-wrap:balance}
+h2{font-size:.78rem;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;font-weight:700}
+.sub{margin:4px 0 0;color:var(--muted);font-size:.88rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.state{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:420px){.state{grid-template-columns:1fr}}
+.field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+.stepper{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.stepper button{width:44px;border:0;background:transparent;color:var(--ink);font-size:1.2rem;cursor:pointer}
+.stepper button:hover{background:var(--m1)}
+.stepper input{flex:1;min-width:0;width:100%;border:0;border-inline:1px solid var(--line);background:var(--surface);color:var(--ink);text-align:center;font-size:1.25rem;font-weight:600;padding:8px 4px;font-family:var(--font-num)}
+.presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;font-size:.82rem;color:var(--muted)}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:.85rem;cursor:pointer;min-height:36px}
+.chip:hover{border-color:var(--accent)}
+.answer{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.big{min-width:6.5rem;text-align:center;border-radius:10px;padding:10px 16px;font-size:2.6rem;font-weight:700;line-height:1.1;color:var(--m-ink)}
+.answer .meta{flex:1;min-width:12rem}
+.answer .meta p{margin:0}
+.ev{font-size:1.35rem;font-weight:600}
+.note{color:var(--muted);font-size:.84rem}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{padding:8px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:.75rem;color:var(--muted);font-weight:600}
+th:first-child,td:first-child{text-align:left}
+tr.pick td{background:var(--m2)}
+tr.dis td{color:var(--muted);opacity:.55}
+.tag{display:inline-block;min-width:3rem;text-align:center;border-radius:6px;padding:2px 8px;font-weight:700;color:var(--m-ink)}
+.sel{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:4px 10px;font:inherit;font-size:.8rem;cursor:pointer;min-height:32px}
+.sel[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.sel:disabled{cursor:not-allowed}
+.rolls{display:grid;grid-template-columns:repeat(auto-fill,minmax(4.2rem,1fr));gap:8px}
+.roll{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;min-height:52px;font:inherit}
+.roll b{font-size:1.2rem;font-family:var(--font-num)}
+.roll span{font-size:.7rem;color:var(--muted)}
+.roll:hover:not(:disabled){border-color:var(--accent)}
+.roll:disabled{opacity:.4;cursor:not-allowed}
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(3.7rem,1fr));gap:6px}
+.tile{border-radius:8px;padding:6px 4px;text-align:center;color:var(--m-ink);border:2px solid transparent;display:flex;flex-direction:column;line-height:1.25}
+.tile .n{font-size:.7rem;opacity:.75}
+.tile .x{font-weight:700;font-size:1.05rem;font-family:var(--font-num)}
+.tile .r{font-size:.68rem;opacity:.8;font-family:var(--font-num)}
+.tile.now{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface) inset}
+.c1{background:var(--m1)}.c2{background:var(--m2)}.c3{background:var(--m3)}.c5{background:var(--m5)}.c10{background:var(--m10)}
+.log{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.log li{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:.88rem}
+.total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.actions{display:flex;gap:8px;margin-top:10px}
+details{font-size:.88rem}
+summary{cursor:pointer;font-weight:600;min-height:32px}
+details ul{margin:8px 0 0;padding-left:1.2rem;color:var(--muted)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+html{color-scheme:light}body{margin:0}[hidden]{display:none!important}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>スゴロク最適倍率</h1>
+    <p class="sub">2サイコロ・倍率はリソースを消費・期待報酬の合計が最大になる倍率を出します。</p>
+  </header>
+
+  <section class="card" aria-labelledby="h-state">
+    <h2 id="h-state">いまの状態</h2>
+    <div class="state">
+      <div class="field">
+        <label for="pos">いるマス(1〜24)</label>
+        <div class="stepper"><button type="button" id="pos-dn" aria-label="マスを1戻す">−</button><input id="pos" type="number" inputmode="numeric" min="1" max="24" value="1"><button type="button" id="pos-up" aria-label="マスを1進める">＋</button></div>
+      </div>
+      <div class="field">
+        <label for="res">残りリソース</label>
+        <div class="stepper"><button type="button" id="res-dn" aria-label="リソースを1減らす">−</button><input id="res" type="number" inputmode="numeric" min="0" max="1000" value="500"><button type="button" id="res-up" aria-label="リソースを1増やす">＋</button></div>
+      </div>
+    </div>
+    <div class="presets"><span>最初からやり直す:</span>
+      <button type="button" class="chip" data-start="200">リソース200</button>
+      <button type="button" class="chip" data-start="500">リソース500</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-ans" aria-live="polite">
+    <h2 id="h-ans">振る前に選ぶ倍率</h2>
+    <div class="answer">
+      <div class="big num" id="big">×1</div>
+      <div class="meta">
+        <p class="note">この状態から使い切るまでに得られる報酬の期待値</p>
+        <p class="ev num" id="ev">0</p>
+        <p class="note" id="why"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-cmp">
+    <h2 id="h-cmp">倍率ごとの期待値</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>倍率</th><th>今後の期待獲得報酬</th><th>最適との差</th><th>今回振る</th></tr></thead>
+      <tbody id="cmp"></tbody>
+    </table></div>
+    <p class="note" style="margin:8px 0 0">「今回振る」で選んだ倍率が、下の出目ボタンで使われます。選ばなければ最適倍率です。</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-roll">
+    <h2 id="h-roll">出た目の合計を押す</h2>
+    <div class="rolls" id="rolls"></div>
+    <p class="note" style="margin:10px 0 0">押すと倍率分のリソースを引き、マスを進め、止まったマスの報酬を記録します。</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-board">
+    <h2 id="h-board">マス別の最適倍率(残りリソース <span class="num" id="board-res">0</span>)</h2>
+    <div class="board" id="board"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-log">
+    <h2 id="h-log">記録</h2>
+    <div class="total"><span class="note">獲得報酬の合計</span><span class="ev num" id="gain">0</span></div>
+    <ul class="log" id="log"></ul>
+    <div class="actions"><button type="button" class="chip" id="undo">1手戻す</button></div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>前提と報酬表</summary>
+      <ul>
+        <li>サイコロ2個の合計(2〜12)だけ進みます。倍率を上げても進む数は変わりません。</li>
+        <li>倍率は振る前に選び、倍率と同じ数のリソースを消費します(×1でも1消費)。</li>
+        <li>報酬は止まったマスの報酬額×倍率です。スタート位置の報酬は数えません。</li>
+        <li>24マスのループで、25マス目は1マス目です。</li>
+        <li>期待値が最大になる選び方なので、1回ごとの結果は運でぶれます。</li>
+      </ul>
+      <div class="tbl" style="margin-top:10px"><table id="rewards"></table></div>
+    </details>
+  </section>
+</div>
+
+<script>
+const R=[50,400,800,50,0,0,0,0,625,50,200,0,0,200,800,0,50,200,625,0,62.5,200,400,0];
+const N=24, MS=[1,2,3,5,10], MAXR=1000;
+const P=[]; for(let s=2;s<=12;s++) P[s]=(6-Math.abs(s-7))/36;
+const ER=R.map((_,i)=>{let e=0;for(let s=2;s<=12;s++)e+=P[s]*R[(i+s)%N];return e;});
+const V=[new Float64Array(N)], OPT=[new Int8Array(N)];
+function cont(r,i){let c=0;const v=V[r];for(let s=2;s<=12;s++)c+=P[s]*v[(i+s)%N];return c;}
+function qv(r,i,m){return m*ER[i]+cont(r-m,i);}
+for(let r=1;r<=MAXR;r++){
+  const v=new Float64Array(N),o=new Int8Array(N);
+  for(let i=0;i<N;i++){let best=-1,bm=1;
+    for(const m of MS){if(m>r)break;const q=qv(r,i,m);if(q>best+1e-9){best=q;bm=m;}}
+    v[i]=best;o[i]=bm;}
+  V.push(v);OPT.push(o);
+}
+
+const $=id=>document.getElementById(id);
+const fmt=(x,d=1)=>x.toLocaleString("ja-JP",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmt0=x=>x.toLocaleString("ja-JP",{maximumFractionDigits:1});
+let pos=1,res=500,chosen=null,gain=0,hist=[];
+
+function clamp(v,lo,hi){v=Math.round(Number(v));if(!isFinite(v))v=lo;return Math.min(hi,Math.max(lo,v));}
+
+function render(){
+  $("pos").value=pos; $("res").value=res;
+  const i=pos-1, over=res<1;
+  const rec=over?0:OPT[res][i];
+  const m=over?0:(chosen&&chosen<=res?chosen:rec);
+  const big=$("big");
+  big.className="big num "+(over?"c1":"c"+rec);
+  big.textContent=over?"終了":"×"+rec;
+  $("ev").textContent=over?"0":fmt(V[res][i]);
+  $("why").textContent=over?"リソースが残っていません。":
+    "次の出目で止まる位置の期待報酬(×1)は "+fmt(ER[i])+" です。";
+
+  let rows="";
+  for(const k of MS){
+    const ok=!over&&k<=res;
+    const q=ok?qv(res,i,k):null;
+    const d=ok?q-V[res][i]:null;
+    const isRec=ok&&k===rec;
+    rows+=`<tr class="${ok?(k===m&&!over?"pick":""):"dis"}"><td><span class="tag c${k}">×${k}</span></td>
+      <td class="num">${ok?fmt(q):"−"}</td>
+      <td class="num" style="color:${ok&&d<-1e-9?"var(--bad)":"var(--good)"}">${ok?(isRec?"最適":fmt(d)):"−"}</td>
+      <td><button type="button" class="sel" data-m="${k}" aria-pressed="${k===m&&!over}" ${ok?"":"disabled"}>${k===m&&!over?"選択中":"選ぶ"}</button></td></tr>`;
+  }
+  $("cmp").innerHTML=rows;
+
+  let rl="";
+  for(let s=2;s<=12;s++){
+    rl+=`<button type="button" class="roll" data-s="${s}" ${over||!m?"disabled":""}><b>${s}</b><span>${6-Math.abs(s-7)}/36</span></button>`;
+  }
+  $("rolls").innerHTML=rl;
+
+  $("board-res").textContent=res;
+  let bd="";
+  for(let t=0;t<N;t++){
+    const o=res>=1?OPT[res][t]:1;
+    bd+=`<div class="tile c${o}${t===i?" now":""}"><span class="n">${t+1}マス</span><span class="x">×${o}</span><span class="r">報酬${fmt0(R[t])}</span></div>`;
+  }
+  $("board").innerHTML=bd;
+
+  $("gain").textContent=fmt0(gain);
+  $("log").innerHTML=hist.length?hist.slice().reverse().map((h,k)=>
+    `<li><span class="num">${hist.length-k}. ${h.from}→${h.to}マス(出目${h.s})</span><span class="num">×${h.m} で ${fmt0(h.reward)}</span></li>`).join("")
+    :`<li class="note">まだ記録がありません。</li>`;
+  $("undo").disabled=!hist.length;
+}
+
+function setPos(v){pos=clamp(v,1,N);chosen=null;render();}
+function setRes(v){res=clamp(v,0,MAXR);chosen=null;render();}
+$("pos").addEventListener("change",e=>setPos(e.target.value));
+$("res").addEventListener("change",e=>setRes(e.target.value));
+$("pos-dn").onclick=()=>setPos(pos===1?N:pos-1);
+$("pos-up").onclick=()=>setPos(pos===N?1:pos+1);
+$("res-dn").onclick=()=>setRes(res-1);
+$("res-up").onclick=()=>setRes(res+1);
+document.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>{
+  pos=1;res=Number(b.dataset.start);chosen=null;gain=0;hist=[];render();});
+$("cmp").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-m]");if(!b||b.disabled)return;
+  chosen=Number(b.dataset.m);render();});
+$("rolls").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-s]");if(!b||b.disabled)return;
+  const s=Number(b.dataset.s), i=pos-1;
+  const m=chosen&&chosen<=res?chosen:OPT[res][i];
+  const to=(i+s)%N, reward=m*R[to];
+  hist.push({from:pos,to:to+1,s,m,reward,res0:res,gain0:gain});
+  res-=m;pos=to+1;gain+=reward;chosen=null;render();});
+$("undo").onclick=()=>{
+  const h=hist.pop();if(!h)return;
+  pos=h.from;res=h.res0;gain=h.gain0;chosen=null;render();};
+
+(function(){
+  let h="<thead><tr><th>マス</th>";
+  const rowA=[],rowB=[];
+  for(let t=0;t<N;t++){rowA.push(t+1);rowB.push(R[t]);}
+  const half=N/2;
+  let out="<thead><tr><th>マス</th><th>報酬</th><th>マス</th><th>報酬</th></tr></thead><tbody>";
+  for(let t=0;t<half;t++) out+=`<tr><td class="num">${t+1}</td><td class="num">${fmt0(R[t])}</td><td class="num">${t+1+half}</td><td class="num">${fmt0(R[t+half])}</td></tr>`;
+  $("rewards").innerHTML=out+"</tbody>";
+})();
+render();
+</script>
+</body>
+</html>
